@@ -1,0 +1,585 @@
+{UTF-8}
+********************************************************
+	.community corona 8
+********************************************************~
+		Copyright 2020 Tom Fiddaman, Ventana Systems, Inc.
+		
+		Permission is hereby granted, free of charge, to any person obtaining a copy of this \
+		software and associated documentation files (the "Software"), to deal in \
+		the Software without restriction, including without limitation the rights \
+		to use, copy, modify, merge, publish, distribute, sublicense, and/or sell \
+		copies of the Software, and to permit persons to whom the Software is \
+		furnished to do so, subject to the following conditions:
+		
+		The above copyright notice and this permission notice shall be included in all \
+		copies or substantial portions of the Software.
+		
+		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR \
+		IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, \
+		FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL \
+		THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER \
+		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING \
+		FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER \
+		DEALINGS IN THE SOFTWARE.
+	|
+
+Initial Population=
+	100000
+	~	people [1,200000]
+	~		|
+
+Seasonal Period=
+	365
+	~	days
+	~	One year
+	|
+
+Effect of Season=
+	1-Seasonal Amplitude+Seasonal Amplitude*(1+COS( 2*3.14159*(Time-Peak Season)/Seasonal Period\
+		 ))/2
+	~	dmnl
+	~	Effect of season on transmission - peak transmission occurs in winter; \
+		transmission in trough = (1-amplitude)
+	|
+
+Peak Season=
+	0
+	~	day
+	~		|
+
+Infecting=
+	Active Infected*Transmission Rate*Effect of Season
+	~	people/day
+	~		|
+
+Seasonal Amplitude=
+	0
+	~	dmnl [0,1]
+	~	Amplitude of seasonal swings in transmission.
+	|
+
+Contact Density Decline=
+	0
+	~	dmnl [0,4]
+	~	Slope of decline in contacts as the infection penetrates to less-connected \
+		portions of the social network.
+	|
+
+Relative Contact Density=
+	1/(1+Contact Density Decline*(1-Fraction Susceptible))
+	~	dmnl
+	~	Decline in contacts as the infection penetrates to less-connected portions \
+		of the social network. The effect is real, but the functional form is \
+		notional here. This would be a good focus for improvement.
+	|
+
+Transmission Rate=
+	Initial Uncontrolled Transmission Rate*Relative Behavioral Risk*Fraction Susceptible\
+		*Relative Contact Density
+	~	fraction/day
+	~	Fractional rate of transmission from non-isolated infected to the \
+		susceptible population.
+	|
+
+Active Infected=
+	Infected*(1-Isolation Effectiveness)
+	~	people
+	~	Effective number of infected people, after adjusting for reduction in \
+		infectiousness from isolation, quarantine, and monitoring.
+	|
+
+Potential Isolation Effectiveness=
+	0
+	~	fraction [0,1]
+	~	Effect of isolation and monitoring measures, absent strain on the system.
+	|
+
+Isolation Effectiveness=
+	SMOOTH3(STEP(Potential Isolation Effectiveness,Import Time),Isolation Reaction Time)
+	/(1+Public Health Strain^Public Health Capacity Sensitivity)
+	~	fraction [0,1]
+	~	Fractional reduction in infections gained by isolating infected persons.
+	|
+
+Hospital Strain=
+	Serious Cases/Hospital Capacity
+	~	Index
+	~	Strain on hospital capacity, from ratio of serious cases to capacity.
+	|
+
+Relative Behavioral Risk=
+	SMOOTH3(1-STEP(Behavioral Risk Reduction,Import Time),Behavior Reaction Time)
+	~	dmnl
+	~		|
+
+Public Health Capacity Sensitivity=
+	2
+	~	dmnl [1,5]
+	~	Sensitivity of public health performance to capacity constraint.
+	|
+
+Public Health Capacity=
+	1000
+	~	people
+	~	Capacity of the public health system to monitor, quarantine, and trace \
+		contacts. Expressed as number of infected people that can be managed.
+	|
+
+Fatality Rate=
+	Untreated Fatality Rate+(Treated Fatality Rate-Untreated Fatality Rate)/(1+Hospital Strain\
+		^Hospital Capacity Sensitivity)
+	~	fraction
+	~		|
+
+Public Health Strain=
+	Infected/Public Health Capacity
+	~	Index
+	~	Strain on the public health system, expressed as the burden of infected \
+		relative to capacity.
+	|
+
+Hospital Capacity Sensitivity=
+	2
+	~	dmnl [1,5]
+	~	Sensitivity of care quality to capacity.
+	|
+
+Importing Infected=
+	N Imported Infections*PULSE(Import Time,TIME STEP)/TIME STEP
+	~	people/day
+	~	Import of infections into the region. This is a one-time introduction; \
+		there is no repeated challenge from an outside reservoir.
+	|
+
+Fraction Susceptible=
+	Susceptible/Initial Population
+	~	fraction
+	~	Fraction of initial population remaining susceptible.
+	|
+
+Hospital Capacity=
+	100
+	~	people [0,1000]
+	~	Hospital capacity, expressed as number of serious infected cases that can \
+		be handled given beds, staff, etc.
+	|
+
+Serious Cases=
+	Infected*Fraction Requiring Hospitalization
+	~	people
+	~	Serious cases, requiring hospitalization.
+	|
+
+Deaths= INTEG (
+	Dying,
+		0)
+	~	people
+	~	Cumulative infections resolving to death.
+	|
+
+Dying=
+	Infected*Fatality Rate/Infection Duration
+	~	people/day
+	~		|
+
+Exposed= INTEG (
+	Infecting-Advancing,
+		0)
+	~	people
+	~	Exposed, asymptomatic population. As a simplification, assumed to be \
+		non-infectious, though there appears to be some infectivity for \
+		coronavirus in reality.
+	|
+
+Fraction Requiring Hospitalization=
+	0.1
+	~	fraction [0,1,0.01]
+	~	Fraction of infected who require hospitalization.
+	|
+
+Recovered= INTEG (
+	Recovering,
+		0)
+	~	people
+	~	Cumulative recovered people. As a simplification, these are assumed immune \
+		- there is no reinfection.
+	|
+
+Recovering=
+	Infected/Infection Duration*(1-Fatality Rate)
+	~	people/day
+	~		|
+
+Untreated Fatality Rate=
+	0.04
+	~	fraction [0,0.1]
+	~	Fatality rate when minimally treated due to overwhelmed, chaotic health \
+		care.
+	|
+
+Infected= INTEG (
+	Advancing+Importing Infected-Dying-Recovering,
+		0)
+	~	people
+	~	Infected, symptomatic, infectious people.
+	|
+
+Treated Fatality Rate=
+	0.01
+	~	fraction [0,0.1]
+	~	Fatality rate with good health care.
+	|
+
+Advancing=
+	Exposed/Incubation Time
+	~	people/day
+	~		|
+
+Behavior Reaction Time=
+	20
+	~	day [1,60]
+	~	Time from first infection for behavioral risk reductions to be fully \
+		implemented.
+	|
+
+Behavioral Risk Reduction=
+	0
+	~	fraction [0,1]
+	~	Fractional reduction in risk from social distancing, increased \
+		handwashing, and other behavioral measures.
+	|
+
+Incubation Time=
+	5
+	~	day [1,10]
+	~	Time to onset of symptoms among exposed people.
+	|
+
+N Imported Infections=
+	3
+	~	people [0,100]
+	~	Number of infections initially imported into the region.
+	|
+
+Infection Duration=
+	7
+	~	day [1,10]
+	~	Duration of infection. As a simplification, this is the same for cases \
+		resulting in recovery and death, though in reality serious cases have \
+		longer duration.
+	|
+
+Isolation Reaction Time=
+	2
+	~	day [1,30]
+	~	Time from first infected person needed to ramp up public health measures.
+	|
+
+R0=
+	3.3
+	~	dmnl [1,4]
+	~	Base reproduction ratio for the disease. Plausible range reported for \
+		coronavirus is about 2.2-3.9.
+	|
+
+Susceptible= INTEG (
+	-Infecting,
+		Initial Population)
+	~	people
+	~	Susceptible population.
+	|
+
+Initial Uncontrolled Transmission Rate=
+	R0/Infection Duration
+	~	people/person/day
+	~	Initial transmission rate, with 100% susceptibles and no controls.
+	|
+
+Import Time=
+	10
+	~	day [1,100]
+	~	Time of first infection.
+	|
+
+********************************************************
+	.Control
+********************************************************~
+		Simulation Control Parameters
+	|
+
+FINAL TIME  = 300
+	~	day
+	~	The final time for the simulation.
+	|
+
+INITIAL TIME  = 0
+	~	day
+	~	The initial time for the simulation.
+	|
+
+SAVEPER  = 
+        TIME STEP
+	~	day [0,?]
+	~	The frequency with which output is stored.
+	|
+
+TIME STEP  = 0.125
+	~	day [0,?]
+	~	The time step for the simulation.
+	|
+
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Full Model Structure
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|72,72,100,0
+10,1,Susceptible,151,265,35,17,3,131,0,0,-1,0,0,0,0,0,0,0,0,0
+10,2,Exposed,339,266,30,15,3,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,3,Infected,522,267,30,15,3,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,4,Recovered,768,270,34,17,3,3,0,0,-1,0,0,0,0,0,0,0,0,0
+11,5,1278,243,265,5,6,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,6,Infecting,243,283,27,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,7,5,1,100,0,0,22,3,0,0,0-0-255,|12||0-0-0,1|(212,265)|
+1,8,5,2,4,0,0,22,1,0,0,255-0-0,|12||0-0-0,1|(278,265)|
+11,9,420,436,266,5,6,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,10,Advancing,436,284,32,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,11,9,2,100,0,0,22,1,0,0,255-0-0,|12||0-0-0,1|(400,266)|
+1,12,9,3,4,0,0,22,1,0,0,255-0-0,|12||0-0-0,1|(466,266)|
+10,13,Incubation Time,353,321,47,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,14,Initial Uncontrolled Transmission Rate,142,109,54,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,15,R0,145,38,12,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+1,16,15,14,0,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(144,62)|
+1,17,13,10,1,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(390,305)|
+10,18,Isolation Effectiveness,497,389,40,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,19,Infection Duration,740,228,27,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+1,20,2,10,1,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(363,286)|
+10,21,Initial Population,135,334,48,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-0-128,0,0,0,0,0,0
+1,22,21,1,0,0,0,0,3,128,1,192-192-192,|12||0-0-0,1|(140,308)|
+12,23,48,509,162,10,8,0,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,24,26,3,4,0,0,22,0,0,0,-1--1--1,,1|(509,230)|
+1,25,26,23,100,0,0,22,0,0,0,-1--1--1,,1|(509,184)|
+11,26,48,509,203,6,5,33,3,0,0,2,0,0,0,0,0,0,0,0,0
+10,27,Importing Infected,474,203,29,20,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,28,30,4,4,0,0,22,0,0,0,-1--1--1,,1|(695,267)|
+1,29,30,3,100,0,0,22,0,0,0,-1--1--1,,1|(599,267)|
+11,30,1058,651,267,5,6,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,31,Recovering,651,285,35,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,32,3,31,1,0,0,12,1,128,0,0-128-0,|12||0-0-0,1|(565,293)|
+1,33,19,30,1,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(691,251)|
+10,34,Infection Duration,84,40,31,20,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,35,34,14,0,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(107,69)|
+10,36,N Imported Infections,407,114,34,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,37,Import Time,376,156,36,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,38,Isolation Reaction Time,551,437,43,15,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,39,Relative Behavioral Risk,247,110,46,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,40,Behavior Reaction Time,314,35,43,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,41,Behavioral Risk Reduction,224,34,46,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,42,40,39,0,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(285,67)|
+1,43,41,39,0,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(233,65)|
+12,44,461860936,98,587,113,113,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Susceptible,graph
+12,45,461860944,322,587,113,113,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Exposed,graph
+12,46,461860952,546,587,113,113,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Infected,graph
+12,47,461860960,770,587,113,113,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Recovered,Graph
+12,48,461860968,995,587,113,113,3,44,0,0,2,0,0,0,0,0,0,0,0,0
+Deaths,Graph
+10,49,Fraction Susceptible,91,210,35,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,50,Transmission Rate,223,194,40,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,51,1,49,1,0,0,12,0,64,0,-1--1--1,,1|(107,243)|
+1,52,21,49,1,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(98,290)|
+1,53,39,50,0,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(237,145)|
+1,54,14,50,0,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(177,146)|
+1,55,49,50,1,0,0,12,0,64,0,-1--1--1,,1|(137,184)|
+1,56,50,5,1,0,0,12,0,64,0,-1--1--1,,1|(235,215)|
+10,57,Active Infected,362,368,44,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,58,3,57,1,0,0,12,1,64,0,255-0-0,|12||0-0-0,1|(466,338)|
+1,59,57,6,1,0,0,12,1,64,0,255-0-0,|12||0-0-0,1|(267,336)|
+1,60,18,57,1,0,0,12,1,64,0,255-128-0,|12||0-0-0,1|(428,386)|
+10,61,Deaths,766,186,30,15,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,62,64,61,4,0,0,22,0,0,0,-1--1--1,,3|(597,188)|(608,188)|(672,188)|
+1,63,64,3,100,0,0,22,0,0,0,-1--1--1,,1|(597,267)|
+11,64,1168,597,228,6,5,33,3,0,0,4,0,0,0,0,0,0,0,0,0
+10,65,Dying,623,228,20,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,66,Hospital Capacity,631,47,28,20,3,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-0-128,0,0,0,0,0,0
+10,67,Fatality Rate,691,158,38,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,68,Serious Cases,568,161,44,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,69,3,68,1,0,0,12,1,64,0,255-128-0,|12||0-0-0,1|(536,206)|
+10,70,Treated Fatality Rate,731,65,46,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,71,Untreated Fatality Rate,804,89,38,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+1,72,70,67,0,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(712,109)|
+1,73,71,67,0,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(747,123)|
+1,74,67,65,1,0,0,12,1,64,0,255-128-0,|12||0-0-0,1|(671,195)|
+1,75,67,30,1,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(680,230)|
+1,76,3,64,1,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(572,248)|
+1,77,19,65,1,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(668,243)|
+10,78,Fraction Requiring Hospitalization,513,105,53,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,79,78,68,0,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(539,132)|
+10,80,Public Health Capacity,686,348,40,20,3,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-0-128,0,0,0,0,0,0
+10,81,Potential Isolation Effectiveness,656,413,52,17,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,82,81,18,1,0,0,0,1,192,0,0-0-0,|12||0-0-0,1|(587,392)|
+1,83,37,27,0,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(416,174)|
+1,84,36,27,0,0,0,0,1,64,0,0-0-0,|12||0-0-0,1|(435,152)|
+10,85,TIME STEP,359,194,43,12,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,86,85,27,0,1,0,0,1,64,0,0-0-0,|12||0-0-0,1|(416,198)|
+10,87,Hospital Capacity Sensitivity,824,137,51,20,8,3,1,2,-1,0,0,0,0-0-0,0-0-0,|12||128-128-128,0,0,0,0,0,0
+10,88,Import Time,424,442,44,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+10,89,Import Time,347,73,44,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,90,89,39,0,0,0,0,1,192,0,0-0-0,|12||0-0-0,1|(310,86)|
+1,91,87,67,0,1,0,0,1,192,0,0-0-0,|12||0-0-0,1|(757,147)|
+10,92,Hospital Strain,626,114,44,12,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,93,Public Health Strain,541,328,40,20,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,94,3,93,1,0,0,12,1,192,0,255-128-0,|12||0-0-0,1|(535,298)|
+1,95,93,18,1,0,0,12,1,192,0,255-128-0,|12||0-0-0,1|(533,358)|
+1,96,68,92,1,0,0,12,1,192,0,255-128-0,|12||0-0-0,1|(587,137)|
+1,97,92,67,1,0,0,12,1,192,0,255-128-0,|12||0-0-0,1|(667,126)|
+1,98,66,92,1,0,0,0,1,192,0,0-0-0,|12||0-0-0,1|(635,77)|
+10,99,Public Health Capacity Sensitivity,749,420,56,20,8,3,1,2,-1,0,0,0,0-0-0,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,100,99,18,1,1,0,0,1,64,0,0-0-0,|12||0-0-0,1|(625,387)|
+1,101,80,93,0,0,0,0,1,192,0,0-0-0,|12||0-0-0,1|(620,339)|
+1,102,38,18,0,0,0,0,1,192,0,0-0-0,|12||0-0-0,1|(532,419)|
+1,103,88,18,0,0,0,0,1,192,0,0-0-0,|12||0-0-0,1|(448,423)|
+10,104,Relative Contact Density,78,152,48,20,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,105,Contact Density Decline,32,88,47,20,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,106,105,104,0,0,0,0,1,192,0,0-0-0,|12||0-0-0,1|(50,114)|
+1,107,49,104,1,0,0,0,0,192,0,-1--1--1,,1|(69,178)|
+1,108,104,50,1,0,0,0,0,192,0,-1--1--1,,1|(140,145)|
+12,109,461860976,994,362,113,113,3,15,0,0,2,0,0,0,0,0,0,0,0,0
+Public Health Strain,graph
+12,110,461860984,994,137,113,113,3,15,0,0,2,0,0,0,0,0,0,0,0,0
+Hospital Strain,graph
+12,111,0,495,42,74,26,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,|12|B|0-128-0,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+12,112,0,719,29,38,13,8,135,0,18,-1,0,253,253,-1--1--1,0-0-0,|12|U|0-0-255,0,0,0,0,0,0
+http://metasd.com|metasd.com
+10,113,Effect of Season,212,368,48,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,114,Peak Season,311,403,40,12,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|12||128-128-128,0,0,0,0,0,0
+10,115,Seasonal Amplitude,257,435,31,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+1,116,114,113,0,1,0,0,1,128,0,0-0-0,|12||0-0-0,1|(268,387)|
+10,117,Seasonal Period,86,371,48,12,8,3,1,2,0,0,0,0,0-0-0,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,118,117,113,0,1,0,0,1,128,0,0-0-0,|12||0-0-0,1|(142,369)|
+10,119,Time,189,436,25,12,8,2,1,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,120,119,113,0,1,0,0,1,64,0,0-0-0,|12||0-0-0,1|(197,408)|
+1,121,113,6,1,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(212,332)|
+1,122,115,113,1,0,0,0,1,128,0,0-0-0,|12||0-0-0,1|(252,431)|
+12,123,0,61,400,65,8,0,7,0,2,0,0,0,0,-1--1--1,0-0-0,|12||128-0-0,0,0,0,0,0,0
+Disease Characteristics
+12,124,0,61,437,38,8,0,7,0,2,-1,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+Policy Levers
+12,125,0,61,456,67,8,0,7,0,2,0,0,0,0,-1--1--1,0-0-0,|12||128-128-128,0,0,0,0,0,0
+Other/Minor Parameters
+12,126,0,821,29,38,13,8,135,0,18,-1,0,253,253,-1--1--1,0-0-0,|12|U|0-0-255,0,0,0,0,0,0
+http://vensim.com|vensim.com
+12,127,0,495,74,134,7,0,7,0,26,-1,0,253,253,-1--1--1,0-0-0,|10|U|0-0-255,0,0,0,0,0,0
+https://opensource.org/licenses/MIT|(C) 2020 - MIT License
+12,128,0,61,419,74,8,0,7,0,2,-1,0,0,0,-1--1--1,0-0-0,|12||0-0-128,0,0,0,0,0,0
+Community Characteristics
+12,129,0,803,438,55,17,3,135,0,22,-1,0,2,0,-1--1--1,0-0-128,|12|B|255-255-255,0,0,0,0,0,0
+Controls
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Policy Exploration - Deaths
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|72,72,100,0
+12,1,0,558,50,73,18,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Affected by Policies
+12,2,0,257,50,89,27,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Characterizing the Disease and Community
+12,3,0,899,124,177,116,3,191,0,0,2,0,0,0,0,0,0,0,0,0
+Hospital Strain,graph
+12,4,0,899,356,177,116,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+Deaths,Graph
+10,5,Isolation Reaction Time,558,329,41,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,6,Behavior Reaction Time,558,192,41,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,7,Behavioral Risk Reduction,558,119,44,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,8,Potential Isolation Effectiveness,558,263,49,14,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,9,Incubation Time,257,172,43,8,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,10,N Imported Infections,558,400,31,14,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,11,Treated Fatality Rate,257,346,43,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,12,Untreated Fatality Rate,257,286,35,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,13,Seasonal Amplitude,257,226,28,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,14,Initial Population,257,400,44,8,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-0-128,0,0,0,0,0,0
+12,15,0,74,49,55,17,3,135,0,22,-1,0,1,0,-1--1--1,0-0-128,|12|B|255-255-255,0,0,0,0,0,0
+Structure
+12,16,0,74,96,55,17,3,135,0,22,-1,0,2,0,-1--1--1,0-0-128,|12|B|255-255-255,0,0,0,0,0,0
+Policy - Deaths
+12,17,0,74,144,55,17,3,135,0,22,-1,0,3,0,-1--1--1,0-0-128,|12|B|255-255-255,0,0,0,0,0,0
+Policy - Infections
+12,18,0,284,451,267,16,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,|12|B|192-192-192,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+12,19,0,157,96,15,15,2,3,0,4,-1,0,0,0,-1--1--1,0-0-128,|12||0-0-0,0,0,0,0,0,0
+10,20,R0,257,119,12,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*Policy Exploration - Infection
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|72,72,100,0
+12,1,0,558,50,73,18,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Affected by Policies
+12,2,0,257,50,89,27,8,135,0,8,-1,0,0,0,-1--1--1,0-0-0,|16||0-0-0,0,0,0,0,0,0
+Parameters Characterizing the Disease and Community
+12,3,6360046,899,124,177,116,3,191,0,0,2,0,0,0,0,0,0,0,0,0
+Infecting,graph
+12,4,4197676,899,356,177,116,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+Infected,Graph
+10,5,Isolation Reaction Time,558,329,41,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,6,Behavior Reaction Time,558,192,41,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,7,Behavioral Risk Reduction,558,119,44,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,8,Potential Isolation Effectiveness,558,263,49,14,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,9,N Imported Infections,558,400,31,14,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+12,10,0,74,49,55,17,3,135,0,22,-1,0,1,0,-1--1--1,0-0-128,|12|B|255-255-255,0,0,0,0,0,0
+Structure
+12,11,0,74,96,55,17,3,135,0,22,-1,0,2,0,-1--1--1,0-0-128,|12|B|255-255-255,0,0,0,0,0,0
+Policy - Deaths
+12,12,0,74,144,55,17,3,135,0,22,-1,0,3,0,-1--1--1,0-0-128,|12|B|255-255-255,0,0,0,0,0,0
+Policy - Infections
+12,13,0,284,451,267,16,8,135,0,18,-1,0,0,0,-1--1--1,128-0-0,|12|B|192-192-192,0,0,0,0,0,0
+Community Coronavirus Conceptual Model - Tom Fiddaman, Ventana Systems, Inc., 2020
+12,14,0,157,144,15,15,2,3,0,4,-1,0,0,0,-1--1--1,0-0-128,|12||0-0-0,0,0,0,0,0,0
+10,15,Incubation Time,257,172,43,8,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,16,Treated Fatality Rate,257,346,43,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,17,Untreated Fatality Rate,257,286,35,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,18,Seasonal Amplitude,257,226,28,14,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+10,19,Initial Population,257,400,44,8,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-0-128,0,0,0,0,0,0
+10,20,R0,257,119,12,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||128-0-0,0,0,0,0,0,0
+///---\\\
+:GRAPH Infection_Sources
+:TITLE Infection Sources
+:SCALE
+:VAR Infecting
+:VAR Importing Exposed
+:VAR Importing Infected
+:VAR Intercepting
+:L<%^E!@
+1:test.vdfx
+9:test
+22:day,days
+22:dmnl,index
+22:people,person
+23:0
+15:0,0,0,0,0,0
+19:100,0
+27:0,
+34:0,
+42:0
+72:0
+73:0
+4:Time
+5:Public Health Capacity
+35:Date
+36:YYYY-MM-DD
+37:2020
+38:3
+39:1
+40:4
+41:0
+76:0
+77:0
+78:0
+79:0
+80:0
+81:0
+24:0
+25:300
+26:300
+75:
+43:
